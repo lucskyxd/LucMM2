@@ -1,4 +1,4 @@
--- LucSky HUD - MM2 ESP + GUI + Antifling com controle completo
+-- LucSky HUD - MM2 ESP + GUI + Auto-pickup + Teleporte até Arma
 -- Feito para executores externos como Synapse X, Fluxus, etc.
 
 local Players = game:GetService("Players")
@@ -9,24 +9,6 @@ local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
-
--- ========= ANTIFLING ========= --
-local Antifling_Enabled = true
-local function antifling()
-    while true do
-        if Antifling_Enabled then
-            for _, v in pairs(Workspace:GetDescendants()) do
-                if v:IsA("BasePart") and v.Velocity.Magnitude > 300 and not v:IsDescendantOf(LocalPlayer.Character) then
-                    v.Velocity = Vector3.new(0, 0, 0)
-                    v.RotVelocity = Vector3.new(0, 0, 0)
-                end
-            end
-        end
-        task.wait(0.1)
-    end
-end
-
-spawn(antifling)
 
 -- ========= ESP ========= --
 local Drawings = {}
@@ -76,29 +58,22 @@ local function drawESP()
                 RLeg = char:FindFirstChild("RightUpperLeg") or char:FindFirstChild("Right Leg")
             }
 
-            local function line(p1, p2)
-                if p1 and p2 then
-                    local p1s, on1 = Camera:WorldToViewportPoint(p1.Position)
-                    local p2s, on2 = Camera:WorldToViewportPoint(p2.Position)
-                    if on1 and on2 then
-                        local line = Drawing.new("Line")
-                        line.From = Vector2.new(p1s.X, p1s.Y)
-                        line.To = Vector2.new(p2s.X, p2s.Y)
-                        line.Color = color
-                        line.Thickness = 3  -- Aumentado a espessura da linha
-                        line.Transparency = 1
-                        line.Visible = true
-                        table.insert(Drawings, line)
+            -- Desenhando o Chams (cobertura total do corpo)
+            for _, part in pairs(parts) do
+                if part then
+                    local cham = Drawing.new("Quad")
+                    local pos1, onScreen1 = Camera:WorldToViewportPoint(part.Position - Vector3.new(0, 0.5, 0))
+                    local pos2, onScreen2 = Camera:WorldToViewportPoint(part.Position + Vector3.new(0, 0.5, 0))
+                    if onScreen1 and onScreen2 then
+                        cham.From = Vector2.new(pos1.X, pos1.Y)
+                        cham.To = Vector2.new(pos2.X, pos2.Y)
+                        cham.Color = color
+                        cham.Thickness = 2
+                        cham.Visible = true
+                        table.insert(Drawings, cham)
                     end
                 end
             end
-
-            -- Desenhando o esqueleto
-            line(parts.Head, parts.Torso)
-            line(parts.Torso, parts.LArm)
-            line(parts.Torso, parts.RArm)
-            line(parts.Torso, parts.LLeg)
-            line(parts.Torso, parts.RLeg)
 
             if parts.Head and ShowNames then
                 local headPos, onScreen = Camera:WorldToViewportPoint(parts.Head.Position + Vector3.new(0, 1.5, 0))
@@ -142,25 +117,6 @@ local function tpToGunAndReturn()
     hrp.CFrame = CFrame.new(gun.Position + Vector3.new(0, 3, 0))
     task.wait(0.4)
     hrp.CFrame = origin
-end
-
--- ========= REMOVE INJEÇÃO ========= --
-local function removeInjection()
-    -- Desabilitar ESP
-    stopESP()
-
-    -- Desabilitar Antifling
-    Antifling_Enabled = false
-
-    -- Limpar desenhos (ESP)
-    clearESP()
-
-    -- Remover a GUI
-    gui:Destroy()
-
-    -- Limpar variáveis e funções relacionadas
-    ESP_Active = false
-    ShowNames = false
 end
 
 -- ========= GUI ========= --
@@ -215,7 +171,7 @@ local function createButton(text, callback)
     holder.Parent = main
 end
 
-createButton("ESP (Esqueleto)", function()
+createButton("ESP (Chams)", function()
     if ESP_Active then stopESP() else startESP() end
     return ESP_Active
 end)
@@ -225,35 +181,47 @@ createButton("TP até Arma", function()
     return false
 end)
 
-createButton("Antifling", function()
-    Antifling_Enabled = not Antifling_Enabled
-    return Antifling_Enabled
-end)
+local dragButton = Instance.new("TextButton", gui)
+dragButton.Size = UDim2.new(0, 150, 0, 32)
+dragButton.Position = UDim2.new(0, 20, 0, 20)
+dragButton.Text = "Mostrar LucSky HUD"
+dragButton.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
+dragButton.TextColor3 = Color3.new(1, 1, 1)
+dragButton.Font = Enum.Font.GothamBold
+dragButton.TextSize = 14
+Instance.new("UICorner", dragButton).CornerRadius = UDim.new(0, 8)
 
-createButton("Exibir Nomes", function()
-    ShowNames = not ShowNames
-    return ShowNames
-end)
+local dragStartPos = nil
+local dragStartMousePos = nil
 
-createButton("Remover Injeção", function()
-    removeInjection()
-    return false
-end)
+-- Função para iniciar o "drag"
+local function startDrag(input)
+    dragStartPos = main.Position
+    dragStartMousePos = input.Position
+    input.Changed:Connect(function()
+        if input.UserInputState == Enum.UserInputState.End then
+            dragStartPos = nil
+            dragStartMousePos = nil
+        end
+    end)
+end
 
-local toggle = Instance.new("TextButton", gui)
-toggle.Size = UDim2.new(0, 150, 0, 32)
-toggle.Position = UDim2.new(0, 20, 0, 20)
-toggle.Text = "Mostrar LucSky HUD"
-toggle.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
-toggle.TextColor3 = Color3.new(1, 1, 1)
-toggle.Font = Enum.Font.GothamBold
-toggle.TextSize = 14
-Instance.new("UICorner", toggle).CornerRadius = UDim.new(0, 8)
+-- Função para "arrastar" a janela
+local function dragMove(input)
+    if dragStartPos and dragStartMousePos then
+        local delta = input.Position - dragStartMousePos
+        main.Position = UDim2.new(dragStartPos.X.Scale, dragStartPos.X.Offset + delta.X, dragStartPos.Y.Scale, dragStartPos.Y.Offset + delta.Y)
+    end
+end
 
-toggle.MouseButton1Click:Connect(function()
+-- Conectar eventos para arrastar o botão
+dragButton.MouseButton1Down:Connect(startDrag)
+dragButton.MouseMoved:Connect(dragMove)
+
+dragButton.MouseButton1Click:Connect(function()
     minimized = not minimized
     main.Visible = not minimized
-    toggle.Text = minimized and "Mostrar LucSky HUD" or "Ocultar LucSky HUD"
+    dragButton.Text = minimized and "Mostrar LucSky HUD" or "Ocultar LucSky HUD"
 end)
 
 main.Visible = true
