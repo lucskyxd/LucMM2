@@ -12,6 +12,8 @@ local Camera = Workspace.CurrentCamera
 local ChamsEnabled = false
 local ShowNames = true
 local ChamsData = {}
+local timertask = nil
+local timertext = nil
 
 -- Limpar os Highlights existentes
 local function clearChams()
@@ -24,6 +26,14 @@ local function clearChams()
 		end
 	end
 	ChamsData = {}
+end
+
+-- Função para converter segundos para minutos
+local function secondsToMinutes(seconds)
+	if seconds == -1 then return "" end
+	local minutes = math.floor(seconds / 60)
+	local remainingSeconds = seconds % 60
+	return string.format("%dm %ds", minutes, remainingSeconds)
 end
 
 -- Determinar função
@@ -183,6 +193,27 @@ local function createButton(text, callback)
 	holder.Parent = main
 end
 
+-- Adicionar o Timer à GUI
+local function createTimer()
+	timertext = Instance.new("TextLabel")
+	timertext.Parent = main
+	timertext.BackgroundTransparency = 1
+	timertext.TextColor3 = Color3.fromRGB(255, 255, 255)
+	timertext.TextScaled = true
+	timertext.AnchorPoint = Vector2.new(0.5, 0.5)
+	timertext.Position = UDim2.fromScale(0.5, 0.15)
+	timertext.Size = UDim2.fromOffset(200, 50)
+	timertext.Font = Enum.Font.Montserrat
+
+	timertask = task.spawn(function()
+		while task.wait(0.5) do
+			local timeLeft = game.ReplicatedStorage.Remotes.Extras.GetTimer:InvokeServer()
+			timertext.Text = secondsToMinutes(timeLeft)
+		end
+	end)
+end
+
+-- Funções dos Botões
 createButton("ESP (Chams)", function()
 	ChamsEnabled = not ChamsEnabled
 	if not ChamsEnabled then
@@ -202,6 +233,7 @@ createButton("Remover GUI", function()
 	return false
 end)
 
+-- Mostrar/Esconder a HUD
 local toggle = Instance.new("TextButton", gui)
 toggle.Size = UDim2.new(0, 150, 0, 32)
 toggle.Position = UDim2.new(0, 20, 0, 20)
@@ -217,5 +249,8 @@ toggle.MouseButton1Click:Connect(function()
 	main.Visible = not minimized
 	toggle.Text = minimized and "Mostrar LucSky HUD" or "Ocultar LucSky HUD"
 end)
+
+-- Iniciar o Timer na HUD
+createTimer()
 
 main.Visible = true
