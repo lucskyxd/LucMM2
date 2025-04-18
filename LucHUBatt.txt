@@ -1,136 +1,148 @@
--- LucSky HUD - MM2 ESP + GUI + Auto-pickup + Teleporte até Arma
+-- LucSky HUD - MM2 Chams + GUI + Auto Pickup + Detecção de Murder
 -- Feito para executores externos como Synapse X, Fluxus, etc.
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local TweenService = game:GetService("TweenService")
-local UserInputService = game:GetService("UserInputService")
-
 local LocalPlayer = Players.LocalPlayer
 local Camera = Workspace.CurrentCamera
 
--- ========= ESP ========= --
-local Drawings = {}
-local ESP_Active = false
+-- Variáveis
+local ChamsEnabled = false
 local ShowNames = true
+local ChamsData = {}
 
-local function clearESP()
-    for _, v in pairs(Drawings) do
-        if typeof(v) == "table" then
-            for _, obj in pairs(v) do if obj and obj.Remove then obj:Remove() end end
-        elseif v and v.Remove then
-            v:Remove()
-        end
-    end
-    Drawings = {}
+-- Limpar os Highlights existentes
+local function clearChams()
+	for _, data in pairs(ChamsData) do
+		if data.Highlight then
+			data.Highlight:Destroy()
+		end
+		if data.Billboard then
+			data.Billboard:Destroy()
+		end
+	end
+	ChamsData = {}
 end
 
+-- Determinar função
 local function getRole(player)
-    local backpack = player:FindFirstChild("Backpack")
-    local char = player.Character
-    if backpack and backpack:FindFirstChild("Gun") or (char and char:FindFirstChild("Gun")) then
-        return "Sheriff"
-    elseif backpack and backpack:FindFirstChild("Knife") or (char and char:FindFirstChild("Knife")) then
-        return "Murder"
-    else
-        return "Innocent"
-    end
+	local backpack = player:FindFirstChild("Backpack")
+	local char = player.Character
+	if backpack and backpack:FindFirstChild("Gun") or (char and char:FindFirstChild("Gun")) then
+		return "Sheriff"
+	elseif backpack and backpack:FindFirstChild("Knife") or (char and char:FindFirstChild("Knife")) then
+		return "Murder"
+	else
+		return "Innocent"
+	end
 end
 
-local function drawESP()
-    clearESP()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-            local role = getRole(player)
-            -- Definindo cores baseadas no papel do jogador
-            local color = role == "Murder" and Color3.fromRGB(255, 0, 0)    -- Vermelho para Murder
-                or role == "Sheriff" and Color3.fromRGB(0, 255, 0)           -- Verde para Sheriff
-                or Color3.fromRGB(0, 0, 255)                                  -- Azul para Inocente
+-- Atualizador de Chams
+local function updateChams()
+	if not ChamsEnabled then return end
 
-            local char = player.Character
-            local parts = {
-                Head = char:FindFirstChild("Head"),
-                Torso = char:FindFirstChild("UpperTorso") or char:FindFirstChild("Torso"),
-                LArm = char:FindFirstChild("LeftUpperArm") or char:FindFirstChild("Left Arm"),
-                RArm = char:FindFirstChild("RightUpperArm") or char:FindFirstChild("Right Arm"),
-                LLeg = char:FindFirstChild("LeftUpperLeg") or char:FindFirstChild("Left Leg"),
-                RLeg = char:FindFirstChild("RightUpperLeg") or char:FindFirstChild("Right Leg")
-            }
+	for _, player in ipairs(Players:GetPlayers()) do
+		if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+			local char = player.Character
+			local role = getRole(player)
 
-            -- Desenhando o Chams (cobertura total do corpo)
-            for _, part in pairs(parts) do
-                if part then
-                    local cham = Drawing.new("Quad")
-                    local pos1, onScreen1 = Camera:WorldToViewportPoint(part.Position - Vector3.new(0, 0.5, 0))
-                    local pos2, onScreen2 = Camera:WorldToViewportPoint(part.Position + Vector3.new(0, 0.5, 0))
-                    if onScreen1 and onScreen2 then
-                        cham.From = Vector2.new(pos1.X, pos1.Y)
-                        cham.To = Vector2.new(pos2.X, pos2.Y)
-                        cham.Color = color
-                        cham.Thickness = 2
-                        cham.Visible = true
-                        table.insert(Drawings, cham)
-                    end
-                end
-            end
+			local highlight = ChamsData[player] and ChamsData[player].Highlight
+			local billboard = ChamsData[player] and ChamsData[player].Billboard
 
-            if parts.Head and ShowNames then
-                local headPos, onScreen = Camera:WorldToViewportPoint(parts.Head.Position + Vector3.new(0, 1.5, 0))
-                if onScreen then
-                    local text = Drawing.new("Text")
-                    text.Position = Vector2.new(headPos.X, headPos.Y)
-                    text.Text = player.Name .. (role ~= "Innocent" and " [" .. role .. "]" or "")
-                    text.Color = color
-                    text.Size = 16
-                    text.Center = true
-                    text.Outline = true
-                    text.Visible = true
-                    table.insert(Drawings, text)
-                end
-            end
-        end
-    end
+			if not highlight then
+				highlight = Instance.new("Highlight")
+				highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+				highlight.FillTransparency = 0.3
+				highlight.OutlineTransparency = 1
+				highlight.Parent = char
+			end
+
+			if not billboard and ShowNames then
+				billboard = Instance.new("BillboardGui", char)
+				billboard.Name = "NameTag"
+				billboard.Adornee = char:FindFirstChild("Head")
+				billboard.Size = UDim2.new(0, 100, 0, 30)
+				billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+				billboard.AlwaysOnTop = true
+
+				local text = Instance.new("TextLabel", billboard)
+				text.Size = UDim2.new(1, 0, 1, 0)
+				text.BackgroundTransparency = 1
+				text.TextColor3 = Color3.new(1, 1, 1)
+				text.TextStrokeTransparency = 0.5
+				text.TextScaled = true
+				text.Font = Enum.Font.GothamBold
+			end
+
+			-- Cores suaves
+			local color = role == "Murder" and Color3.fromRGB(255, 100, 100)
+				or role == "Sheriff" and Color3.fromRGB(100, 255, 100)
+				or Color3.fromRGB(100, 100, 255)
+
+			highlight.Adornee = char
+			highlight.FillColor = color
+
+			if billboard and billboard:FindFirstChildOfClass("TextLabel") then
+				local label = billboard:FindFirstChildOfClass("TextLabel")
+				label.Text = player.Name .. ((role ~= "Innocent") and (" [" .. role .. "]") or "")
+				billboard.Enabled = ShowNames
+			end
+
+			ChamsData[player] = {
+				Highlight = highlight,
+				Billboard = billboard
+			}
+		end
+	end
 end
 
-local function startESP()
-    if ESP_Active then return end
-    ESP_Active = true
-    RunService:BindToRenderStep("LucSkyESP", Enum.RenderPriority.Camera.Value + 1, drawESP)
-end
+-- Loop constante de atualização
+task.spawn(function()
+	while true do
+		if ChamsEnabled then
+			updateChams()
+		end
+		task.wait(0.1)
+	end
+end)
 
-local function stopESP()
-    ESP_Active = false
-    RunService:UnbindFromRenderStep("LucSkyESP")
-    clearESP()
-end
-
--- ========= TP até Arma ========= --
+-- TP até a Arma (Auto-pickup)
 local function tpToGunAndReturn()
-    local char = LocalPlayer.Character
-    if not (char and char:FindFirstChild("HumanoidRootPart")) then return end
-    local hrp = char.HumanoidRootPart
-    local gun = Workspace:FindFirstChild("GunDrop")
-    if not gun then return end
+	local char = LocalPlayer.Character
+	if not (char and char:FindFirstChild("HumanoidRootPart")) then return end
+	local hrp = char.HumanoidRootPart
+	local gun = Workspace:FindFirstChild("GunDrop")
+	if not gun then return end
 
-    local origin = hrp.CFrame
-    hrp.CFrame = CFrame.new(gun.Position + Vector3.new(0, 3, 0))
-    task.wait(0.4)
-    hrp.CFrame = origin
+	local origin = hrp.CFrame
+	hrp.CFrame = CFrame.new(gun.Position + Vector3.new(0, 3, 0))
+	task.wait(0.3)
+	hrp.CFrame = origin
 end
 
--- ========= GUI ========= --
+-- Loop de auto-pickup da arma
+task.spawn(function()
+	while true do
+		if Workspace:FindFirstChild("GunDrop") then
+			tpToGunAndReturn()
+		end
+		task.wait(0.2)
+	end
+end)
+
+-- GUI
 local gui = Instance.new("ScreenGui", game.CoreGui)
 local minimized = false
 local main = Instance.new("Frame", gui)
-main.Size = UDim2.new(0, 250, 0, 230)
-main.Position = UDim2.new(0, 20, 0.5, -115)
+main.Size = UDim2.new(0, 250, 0, 200)
+main.Position = UDim2.new(0, 20, 0.5, -100)
 main.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
 main.BorderSizePixel = 0
 main.Draggable = true
 main.Active = true
 main.Name = "LucSkyHUD"
-
 Instance.new("UICorner", main).CornerRadius = UDim.new(0, 12)
 
 local layout = Instance.new("UIListLayout", main)
@@ -139,89 +151,71 @@ layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 layout.VerticalAlignment = Enum.VerticalAlignment.Top
 
 local function createButton(text, callback)
-    local holder = Instance.new("Frame")
-    holder.Size = UDim2.new(1, 0, 0, 38)
-    holder.BackgroundTransparency = 1
+	local holder = Instance.new("Frame")
+	holder.Size = UDim2.new(1, 0, 0, 38)
+	holder.BackgroundTransparency = 1
 
-    local btn = Instance.new("TextButton", holder)
-    btn.Size = UDim2.new(0.75, 0, 1, 0)
-    btn.Text = text
-    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
-    btn.Font = Enum.Font.GothamBold
-    btn.TextSize = 16
-    btn.TextColor3 = Color3.new(1, 1, 1)
-    btn.BorderSizePixel = 0
-    Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
+	local btn = Instance.new("TextButton", holder)
+	btn.Size = UDim2.new(0.75, 0, 1, 0)
+	btn.Text = text
+	btn.BackgroundColor3 = Color3.fromRGB(50, 50, 60)
+	btn.Font = Enum.Font.GothamBold
+	btn.TextSize = 16
+	btn.TextColor3 = Color3.new(1, 1, 1)
+	btn.BorderSizePixel = 0
+	Instance.new("UICorner", btn).CornerRadius = UDim.new(0, 8)
 
-    local status = Instance.new("TextLabel", holder)
-    status.Size = UDim2.new(0.25, -5, 1, 0)
-    status.Position = UDim2.new(0.75, 5, 0, 0)
-    status.Text = "OFF"
-    status.Font = Enum.Font.GothamBold
-    status.TextSize = 16
-    status.TextColor3 = Color3.fromRGB(200, 50, 50)
-    status.BackgroundTransparency = 1
+	local status = Instance.new("TextLabel", holder)
+	status.Size = UDim2.new(0.25, -5, 1, 0)
+	status.Position = UDim2.new(0.75, 5, 0, 0)
+	status.Text = "OFF"
+	status.Font = Enum.Font.GothamBold
+	status.TextSize = 16
+	status.TextColor3 = Color3.fromRGB(200, 50, 50)
+	status.BackgroundTransparency = 1
 
-    btn.MouseButton1Click:Connect(function()
-        local active = callback()
-        status.Text = active and "ON" or "OFF"
-        status.TextColor3 = active and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
-    end)
+	btn.MouseButton1Click:Connect(function()
+		local active = callback()
+		status.Text = active and "ON" or "OFF"
+		status.TextColor3 = active and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+	end)
 
-    holder.Parent = main
+	holder.Parent = main
 end
 
 createButton("ESP (Chams)", function()
-    if ESP_Active then stopESP() else startESP() end
-    return ESP_Active
+	ChamsEnabled = not ChamsEnabled
+	if not ChamsEnabled then
+		clearChams()
+	end
+	return ChamsEnabled
 end)
 
-createButton("TP até Arma", function()
-    tpToGunAndReturn()
-    return false
+createButton("Exibir Nomes", function()
+	ShowNames = not ShowNames
+	return ShowNames
 end)
 
-local dragButton = Instance.new("TextButton", gui)
-dragButton.Size = UDim2.new(0, 150, 0, 32)
-dragButton.Position = UDim2.new(0, 20, 0, 20)
-dragButton.Text = "Mostrar LucSky HUD"
-dragButton.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
-dragButton.TextColor3 = Color3.new(1, 1, 1)
-dragButton.Font = Enum.Font.GothamBold
-dragButton.TextSize = 14
-Instance.new("UICorner", dragButton).CornerRadius = UDim.new(0, 8)
+createButton("Remover GUI", function()
+	clearChams()
+	gui:Destroy()
+	return false
+end)
 
-local dragStartPos = nil
-local dragStartMousePos = nil
+local toggle = Instance.new("TextButton", gui)
+toggle.Size = UDim2.new(0, 150, 0, 32)
+toggle.Position = UDim2.new(0, 20, 0, 20)
+toggle.Text = "Mostrar LucSky HUD"
+toggle.BackgroundColor3 = Color3.fromRGB(80, 80, 100)
+toggle.TextColor3 = Color3.new(1, 1, 1)
+toggle.Font = Enum.Font.GothamBold
+toggle.TextSize = 14
+Instance.new("UICorner", toggle).CornerRadius = UDim.new(0, 8)
 
--- Função para iniciar o "drag"
-local function startDrag(input)
-    dragStartPos = main.Position
-    dragStartMousePos = input.Position
-    input.Changed:Connect(function()
-        if input.UserInputState == Enum.UserInputState.End then
-            dragStartPos = nil
-            dragStartMousePos = nil
-        end
-    end)
-end
-
--- Função para "arrastar" a janela
-local function dragMove(input)
-    if dragStartPos and dragStartMousePos then
-        local delta = input.Position - dragStartMousePos
-        main.Position = UDim2.new(dragStartPos.X.Scale, dragStartPos.X.Offset + delta.X, dragStartPos.Y.Scale, dragStartPos.Y.Offset + delta.Y)
-    end
-end
-
--- Conectar eventos para arrastar o botão
-dragButton.MouseButton1Down:Connect(startDrag)
-dragButton.MouseMoved:Connect(dragMove)
-
-dragButton.MouseButton1Click:Connect(function()
-    minimized = not minimized
-    main.Visible = not minimized
-    dragButton.Text = minimized and "Mostrar LucSky HUD" or "Ocultar LucSky HUD"
+toggle.MouseButton1Click:Connect(function()
+	minimized = not minimized
+	main.Visible = not minimized
+	toggle.Text = minimized and "Mostrar LucSky HUD" or "Ocultar LucSky HUD"
 end)
 
 main.Visible = true
