@@ -61,9 +61,10 @@ local function drawESP()
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
             local role = getRole(player)
-            local color = role == "Murder" and Color3.fromRGB(255, 0, 0)
-                or role == "Sheriff" and Color3.fromRGB(0, 255, 0)
-                or Color3.fromRGB(0, 170, 255)
+            -- Definindo cores baseadas no papel do jogador
+            local color = role == "Murder" and Color3.fromRGB(255, 0, 0)    -- Vermelho para Murder
+                or role == "Sheriff" and Color3.fromRGB(0, 255, 0)           -- Verde para Sheriff
+                or Color3.fromRGB(0, 0, 255)                                  -- Azul para Inocente
 
             local char = player.Character
             local parts = {
@@ -84,7 +85,7 @@ local function drawESP()
                         line.From = Vector2.new(p1s.X, p1s.Y)
                         line.To = Vector2.new(p2s.X, p2s.Y)
                         line.Color = color
-                        line.Thickness = 2
+                        line.Thickness = 3  -- Aumentado a espessura da linha
                         line.Transparency = 1
                         line.Visible = true
                         table.insert(Drawings, line)
@@ -92,6 +93,7 @@ local function drawESP()
                 end
             end
 
+            -- Desenhando o esqueleto
             line(parts.Head, parts.Torso)
             line(parts.Torso, parts.LArm)
             line(parts.Torso, parts.RArm)
@@ -159,7 +161,6 @@ local function removeInjection()
     -- Limpar variáveis e funções relacionadas
     ESP_Active = false
     ShowNames = false
-    minimized = false
 end
 
 -- ========= GUI ========= --
