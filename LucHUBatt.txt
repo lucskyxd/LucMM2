@@ -1,3 +1,4 @@
+
 -- LucSky HUD - MM2 Chams + GUI + Auto Pickup + Detecção de Murder
 -- Feito para executores externos como Synapse X, Fluxus, etc.
 
@@ -146,7 +147,7 @@ end)
 local gui = Instance.new("ScreenGui", game.CoreGui)
 local minimized = false
 local main = Instance.new("Frame", gui)
-main.Size = UDim2.new(0, 250, 0, 200)
+main.Size = UDim2.new(0, 250, 0, 300)
 main.Position = UDim2.new(0, 20, 0.5, -100)
 main.BackgroundColor3 = Color3.fromRGB(35, 35, 45)
 main.BorderSizePixel = 0
@@ -254,3 +255,72 @@ end)
 createTimer()
 
 main.Visible = true
+
+-- Função ESP da arma caída
+local function enableGunESP()
+	local connectionAdded, connectionRemoved
+
+	connectionAdded = workspace.DescendantAdded:Connect(function(ch)
+		if ch.Name == "GunDrop" then
+			if not gui:FindFirstChild("GunESP") then
+				local highlight = Instance.new("Highlight")
+				highlight.Name = "GunESP"
+				highlight.FillColor = Color3.fromRGB(255, 255, 0)
+				highlight.FillTransparency = 0.3
+				highlight.OutlineTransparency = 1
+				highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+				highlight.Adornee = ch
+				highlight.Parent = gui
+			end
+
+			local guiClone = gui:FindFirstChild("DroppedGunBGUI")
+			if guiClone then
+				local cloned = guiClone:Clone()
+				cloned.Name = "GunESPLabel"
+				cloned.Adornee = ch
+				cloned.Enabled = true
+				cloned.Parent = gui
+			end
+		end
+	end)
+
+	connectionRemoved = workspace.DescendantRemoving:Connect(function(ch)
+		if ch.Name == "GunDrop" then
+			local highlight = gui:FindFirstChild("GunESP")
+			local label = gui:FindFirstChild("GunESPLabel")
+			if highlight then highlight:Destroy() end
+			if label then label:Destroy() end
+		end
+	end)
+
+	return true
+end
+
+-- Função TP até arma caída
+local function tpToDroppedGun()
+	local char = LocalPlayer.Character
+	if not char or not char:FindFirstChild("HumanoidRootPart") then return false end
+
+	local gun = Workspace:FindFirstChild("GunDrop")
+	if not gun then return false end
+
+	local original = char.HumanoidRootPart.CFrame
+	char.HumanoidRootPart.CFrame = CFrame.new(gun.Position + Vector3.new(0, 3, 0))
+
+	task.spawn(function()
+		game.Players.LocalPlayer.Backpack.ChildAdded:Wait()
+		char.HumanoidRootPart.CFrame = original
+	end)
+
+	return true
+end
+
+-- Botão: ESP da arma
+createButton("ESP da Arma", function()
+	return enableGunESP()
+end)
+
+-- Botão: TP até a Arma
+createButton("TP até a Arma", function()
+	return tpToDroppedGun()
+end)
